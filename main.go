@@ -1,48 +1,78 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"github.com/iqoologic/goserve/action"
+	"github.com/iqoologic/goserve/server"
+	"github.com/urfave/cli/v2"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 )
 
-// ./goserve -h 0.0.0.0 -p 8080 -s -c /home/milos/go/src/github.com/baithive/certs/server.crt -k /home/milos/go/src/github.com/baithive/certs/server.key -d /home/milos/NetBeansProjects/ast-website/
 func main() {
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		fmt.Println("\nShutting down ...")
-		os.Exit(0)
-	}()
-
-	host := flag.String("h", "0.0.0.0", "host")
-	port := flag.Int("p", 8080, "port")
-	tls := flag.Bool("s", false, "server over tls")
-	cert := flag.String("c", "server.crt", "certificate")
-	key := flag.String("k", "server.key", "private key")
-	dir := flag.String("d", ".", "directory to serve")
-	flag.Parse()
-
-	var addr = *host + ":" + strconv.Itoa(*port)
-	log.Printf("Serving %s on %s\n", *dir, addr)
-	server := http.NewServeMux()
-	fs := http.FileServer(http.Dir(*dir))
-	server.Handle("/", fs)
-	if *tls {
-		err := http.ListenAndServeTLS(addr, *cert, *key, server)
-		if err != nil {
-			log.Fatalf("Error TLS: %s", err)
-		}
-	} else {
-		err := http.ListenAndServe(addr, server)
-		if err != nil {
-			log.Fatalf("Error: %s", err)
-		}
+	app := cli.App{
+		Action: action.Run,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "host",
+				Aliases:     []string{"u"},
+				Usage:       "host",
+				Value:       "0.0.0.0",
+				DefaultText: "0.0.0.0",
+				Required:    false,
+			},
+			&cli.IntFlag{
+				Name:        "port",
+				Aliases:     []string{"p"},
+				Usage:       "port",
+				Value:       server.RandomizePort(),
+				DefaultText: "random port number",
+				Required:    false,
+			},
+			&cli.StringFlag{
+				Name:        "dir",
+				Aliases:     []string{"d"},
+				Usage:       "directory to serve",
+				Value:       server.CurrentDirectory(),
+				DefaultText: "current directory",
+				Required:    false,
+			},
+			&cli.BoolFlag{
+				Name:        "tls",
+				Aliases:     []string{"s"},
+				Usage:       "http over tls",
+				Value:       false,
+				DefaultText: "false",
+				Required:    false,
+			},
+			&cli.StringFlag{
+				Name:        "crt",
+				Aliases:     []string{"c"},
+				Usage:       "certificate file",
+				Value:       "",
+				DefaultText: "empty",
+				Required:    false,
+			},
+			&cli.StringFlag{
+				Name:        "key",
+				Aliases:     []string{"k"},
+				Usage:       "private key",
+				Value:       "",
+				DefaultText: "empty",
+				Required:    false,
+			},
+		},
 	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatalf("Error running app: %v", err)
+	}
+
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	fmt.Printf("Shutting down ...")
 }
